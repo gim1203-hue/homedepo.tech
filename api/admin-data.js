@@ -58,6 +58,12 @@ export default async function handler(request, response) {
       const fulfillmentBySession = new Map(fulfillmentDocuments.filter((document) => document.exists).map((document) => [document.id, document.data()]))
       orders = sessions.data.map((session) => {
         const fulfillment = fulfillmentBySession.get(session.id) || {}
+        const stripeShipping = session.collected_information?.shipping_details || session.shipping_details || null
+        const shippingAddress = fulfillment.shippingAddress || (stripeShipping?.address
+          ? { name: stripeShipping.name || '', ...stripeShipping.address }
+          : session.customer_details?.address
+            ? { name: session.customer_details.name || '', ...session.customer_details.address }
+            : null)
         const intent = typeof session.payment_intent === 'object' ? session.payment_intent : null
         const charge = typeof intent?.latest_charge === 'object' ? intent.latest_charge : null
         const balanceTransaction = typeof charge?.balance_transaction === 'object' ? charge.balance_transaction : null
@@ -70,10 +76,10 @@ export default async function handler(request, response) {
         const estimatedProfit = (session.amount_total || 0) - tax - stripeFee - supplierCost - manualShippingCost - manualTaxCost - manualOtherCost
         return {
           id: session.id,
-          name: fulfillment.customerName || session.customer_details?.name || '',
+          name: fulfillment.customerName || stripeShipping?.name || session.customer_details?.name || '',
           email: fulfillment.customerEmail || session.customer_details?.email || session.customer_email || '',
           phone: fulfillment.customerPhone || session.customer_details?.phone || '',
-          shippingAddress: fulfillment.shippingAddress || null,
+          shippingAddress,
           items: fulfillment.items || [],
           supplementalInvoices: fulfillment.supplementalInvoices || [],
           receiptItems: (session.line_items?.data || []).map((item) => ({
