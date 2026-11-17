@@ -201,6 +201,8 @@ export default async function handler(request, response) {
         id: document.id,
         uid: ticket.uid || '',
         email: ticket.email || '',
+        phone: ticket.phone || '',
+        customerName: ticket.customerName || '',
         type: ticket.type || 'Customer help',
         orderNumber: ticket.orderNumber || '',
         message: ticket.message || '',

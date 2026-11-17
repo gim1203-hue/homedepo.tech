@@ -143,3 +143,72 @@ test('vehicles are inquiry-only and status emails mention tracking', async () =>
   assert.equal(statusEmail('ordered_from_merchant', { number: 'ABC' }), null)
   assert.equal(ORDER_STATUSES.delivered, 'Delivered')
 })
+
+test('support agent tools only see the ticket owner and public product data', async () => {
+  const { createSupportTools, buildTicketPrompt, draftSupportReply } = await import('../api/_lib/supportAgent.js')
+  const orderDocs = {
+    alice: [{ id: 'cs_test_aaaaaaaaaaAAAA111111', data: () => ({ number: 'AAAA111111', status: 'Shipped', carrier: 'UPS', trackingNumber: '1Z1', amountTotal: 9740, items: [{ name: 'Drill', quantity: 1 }] }) }],
+    bob: [{ id: 'cs_test_bbbbbbbbbbBBBB222222', data: () => ({ number: 'BBBB222222', status: 'Processing', amountTotal: 500 }) }],
+  }
+  const db = {
+    collection: (name) => name === 'storeProducts'
+      ? { get: async () => ({ forEach: (fn) => [{ id: 'x1', data: () => ({ name: 'Secret Drill', category: 'Tools & Hardware', sourcePrice: 50, sellerName: 'Walmart', externalUrl: 'https://walmart.com/x', sellerEmail: 'w@w.com' }) }].forEach(fn) }) }
+      : { doc: (uid) => ({ collection: () => ({ orderBy: () => ({ limit: () => ({ get: async () => ({ docs: orderDocs[uid] || [] }) }) }) }) }) },
+  }
+  const [listOrders, getOrder, searchProducts] = createSupportTools(db, 'alice')
+  assert.match(await listOrders.run({}), /AAAA111111/)
+  assert.doesNotMatch(await listOrders.run({}), /BBBB222222/)
+  assert.match(await getOrder.run({ order_number: 'BBBB222222' }), /No order matching/)
+  assert.match(await getOrder.run({ order_number: '#aaaa111111' }), /1Z1/)
+  const found = await searchProducts.run({ query: 'secret drill' })
+  assert.match(found, /Secret Drill/)
+  assert.doesNotMatch(found.toLowerCase(), /walmart/)
+
+  assert.match(buildTicketPrompt({ type: 'Order help', conversation: [{ sender: 'customer', text: 'Where is it?' }] }), /<ticket_conversation>[\s\S]*Customer: Where is it\?/)
+
+  let params
+  const client = { beta: { messages: { toolRunner: async (body) => { params = body; return { stop_reason: 'end_turn', model: body.model, usage: {}, content: [{ type: 'text', text: 'Hi! Your order shipped.\n\nStopShop Support' }] } } } } }
+  const result = await draftSupportReply(db, { uid: 'alice', type: 'Order help', message: 'Where is it?' }, { client })
+  assert.equal(result.draft, 'Hi! Your order shipped.\n\nStopShop Support')
+  assert.equal(params.model, 'claude-opus-5-5')
+  assert.equal(params.fallbacks, 'default')
+  const refusing = { beta: { messages: { toolRunner: async () => ({ stop_reason: 'refusal', content: [] }) } } }
+  await assert.rejects(draftSupportReply(db, { uid: 'alice', message: 'x' }, { client: refusing }), /declined/)
+})
+
+test('chat assistant validates chats, searches products only, and escalates once', async () => {
+  const { validateChat, searchCatalog, runShopAssistant } = await import('../api/_lib/shopAssistant.js')
+  assert.equal(validateChat([{ role: 'user', content: 'hi' }]), true)
+  assert.equal(validateChat([{ role: 'assistant', content: 'hi' }]), false)
+  assert.equal(validateChat([{ role: 'user', content: 'x'.repeat(1001) }]), false)
+  assert.equal(validateChat(Array.from({ length: 21 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: 'x' }))), false)
+  assert.equal(searchCatalog([{ id: 1, name: 'Cordless Drill', category: 'Tools', price: 79.99 }, { id: 2, name: 'Sofa', category: 'Home', price: 500 }], 'cordless drill')[0].name, 'Cordless Drill')
+
+  const added = []
+  const db = {
+    collection: (name) => name === 'storeProducts'
+      ? { get: async () => ({ forEach: (fn) => [{ id: 'd1', data: () => ({ name: 'Hammer Drill', category: 'Tools & Hardware', sourcePrice: 120, sellerName: 'Walmart', externalUrl: 'https://walmart.com/d1' }) }].forEach(fn) }) }
+      : { add: async (doc) => { added.push(doc); return { id: 'ticket1' } } },
+  }
+  let seen
+  const client = { beta: { messages: { toolRunner: async (params) => {
+    seen = params
+    const [search, notify] = params.tools
+    const found = await search.run({ query: 'hammer drill' })
+    assert.doesNotMatch(found.toLowerCase(), /walmart/)
+    assert.match(await notify.run({ customer_name: 'Sam', contact: 'not-valid', summary: 'Broken drill' }), /not a valid/)
+    assert.match(await notify.run({ customer_name: 'Sam', contact: 'sam@example.com', summary: 'Broken drill, order 123' }), /saved|notified/)
+    assert.match(await notify.run({ customer_name: 'Sam', contact: 'sam@example.com', summary: 'again' }), /already been notified/)
+    return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'The team has been notified.' }] }
+  } } } }
+  const result = await runShopAssistant({ db, messages: [{ role: 'user', content: 'My drill broke' }], client })
+  assert.equal(result.escalated, true)
+  assert.ok(result.products.some((product) => product.name === 'Hammer Drill'))
+  assert.equal(added.length, 1)
+  assert.equal(added[0].email, 'sam@example.com')
+  assert.equal(seen.tools.length, 2)
+  assert.equal(seen.model, 'claude-opus-5-5')
+
+  const refusing = { beta: { messages: { toolRunner: async () => ({ stop_reason: 'refusal', content: [] }) } } }
+  assert.match((await runShopAssistant({ db, messages: [{ role: 'user', content: 'x' }], client: refusing })).reply, /support@homedepo\.tech/)
+})

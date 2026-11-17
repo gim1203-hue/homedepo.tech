@@ -1,5 +1,5 @@
 import { createElement, useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ExternalLink, KeyRound, Mail, MapPin, MessageCircle, Package, Paperclip, Plus, ReceiptText, RefreshCw, Search, ShieldCheck, Store, Trash2, Users, Wallet, X } from 'lucide-react'
+import { AlertTriangle, ExternalLink, KeyRound, Mail, MapPin, MessageCircle, Package, Paperclip, Plus, ReceiptText, RefreshCw, Search, ShieldCheck, Sparkles, Store, Trash2, Users, Wallet, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useCatalog } from '../context/CatalogContext'
 import { formatCurrency } from '../utils/format'
@@ -65,6 +65,7 @@ export default function Admin() {
   const [messageCustomer, setMessageCustomer] = useState(null)
   const [messageForm, setMessageForm] = useState({ subject: '', text: '' })
   const [supportReplies, setSupportReplies] = useState({})
+  const [draftingTicket, setDraftingTicket] = useState('')
   const [mailboxView, setMailboxView] = useState('new')
   const [supportView, setSupportView] = useState('new')
 
@@ -249,6 +250,20 @@ export default function Admin() {
     }
   }
 
+  async function draftSupportReply(ticket) {
+    setDraftingTicket(ticket.id)
+    setError('')
+    try {
+      const result = await adminRequest(session, '/api/admin-support-draft', { method: 'POST', body: { ticketId: ticket.id } })
+      setSupportReplies((current) => ({ ...current, [ticket.id]: result.draft }))
+      setNotice('AI draft ready. Review and edit it before sending.')
+    } catch (actionError) {
+      setError(actionError.message)
+    } finally {
+      setDraftingTicket('')
+    }
+  }
+
   async function reopenSupport(ticket) {
     setWorking(true)
     setError('')
@@ -403,7 +418,7 @@ export default function Admin() {
           <section className="admin-panel">
             <div className="admin-panel-heading"><div><h2>Customer help inbox</h2><p>New and active conversations stay separate from old, closed requests.</p></div><span className="admin-status pending">{data.supportRequests.filter((ticket) => ticket.status !== 'closed').length} active</span></div>
             <div className="admin-support-filters" role="tablist" aria-label="Support conversation categories"><button type="button" className={supportView === 'new' ? 'active' : ''} onClick={() => setSupportView('new')}>New / Active <span>{data.supportRequests.filter((ticket) => ticket.status !== 'closed').length}</span></button><button type="button" className={supportView === 'old' ? 'active' : ''} onClick={() => setSupportView('old')}>Old / Closed <span>{data.supportRequests.filter((ticket) => ticket.status === 'closed').length}</span></button></div>
-            <div className="admin-support-list">{data.supportRequests.filter((ticket) => supportView === 'new' ? ticket.status !== 'closed' : ticket.status === 'closed').map((ticket) => <article className="admin-support-ticket" key={ticket.id}><header><div><strong>{ticket.type}</strong><small>{ticket.email || 'No email'} {ticket.orderNumber ? `· Order ${ticket.orderNumber}` : ''} · {displayDate(ticket.updatedAt || ticket.createdAt)}</small></div><span className={`admin-status ${ticket.status === 'closed' ? 'paid' : 'pending'}`}>{ticket.status.replaceAll('_', ' ')}</span></header><div className="admin-support-thread">{(ticket.conversation?.length ? ticket.conversation : [{ sender: 'customer', text: ticket.message }]).map((entry, index) => <p className={entry.sender === 'support' ? 'support' : 'customer'} key={`${ticket.id}-${index}`}><small>{entry.sender === 'support' ? 'You' : 'Customer'}</small>{entry.text}</p>)}</div>{ticket.status !== 'closed' ? <div className="admin-support-reply"><textarea rows="3" value={supportReplies[ticket.id] || ''} onChange={(event) => setSupportReplies((current) => ({ ...current, [ticket.id]: event.target.value }))} placeholder="Reply to the customer…" /><div><button type="button" className="admin-small-button" disabled={working} onClick={() => replyToSupport(ticket, true)}>Move to Old</button><button type="button" className="admin-primary" disabled={working || !String(supportReplies[ticket.id] || '').trim()} onClick={() => replyToSupport(ticket)}><Mail size={15} /> Send reply</button></div></div> : <footer className="admin-support-old-actions"><button type="button" className="admin-small-button" disabled={working} onClick={() => reopenSupport(ticket)}>Reopen conversation</button></footer>}</article>)}{!data.supportRequests.some((ticket) => supportView === 'new' ? ticket.status !== 'closed' : ticket.status === 'closed') && <p className="admin-empty">No {supportView === 'new' ? 'new or active' : 'old or closed'} conversations.</p>}</div>
+            <div className="admin-support-list">{data.supportRequests.filter((ticket) => supportView === 'new' ? ticket.status !== 'closed' : ticket.status === 'closed').map((ticket) => <article className="admin-support-ticket" key={ticket.id}><header><div><strong>{ticket.type}</strong><small>{ticket.customerName ? `${ticket.customerName} · ` : ''}{ticket.email || ticket.phone || 'No contact'} {ticket.orderNumber ? `· Order ${ticket.orderNumber}` : ''} · {displayDate(ticket.updatedAt || ticket.createdAt)}</small></div><span className={`admin-status ${ticket.status === 'closed' ? 'paid' : 'pending'}`}>{ticket.status.replaceAll('_', ' ')}</span></header><div className="admin-support-thread">{(ticket.conversation?.length ? ticket.conversation : [{ sender: 'customer', text: ticket.message }]).map((entry, index) => <p className={entry.sender === 'support' ? 'support' : 'customer'} key={`${ticket.id}-${index}`}><small>{entry.sender === 'support' ? 'You' : 'Customer'}</small>{entry.text}</p>)}</div>{ticket.status !== 'closed' ? <div className="admin-support-reply"><textarea rows="3" value={supportReplies[ticket.id] || ''} onChange={(event) => setSupportReplies((current) => ({ ...current, [ticket.id]: event.target.value }))} placeholder="Reply to the customer… or click Draft with AI, then review before sending." /><div><button type="button" className="admin-small-button" disabled={working || Boolean(draftingTicket)} onClick={() => draftSupportReply(ticket)}><Sparkles size={14} /> {draftingTicket === ticket.id ? 'Drafting…' : 'Draft with AI'}</button><button type="button" className="admin-small-button" disabled={working} onClick={() => replyToSupport(ticket, true)}>Move to Old</button><button type="button" className="admin-primary" disabled={working || !String(supportReplies[ticket.id] || '').trim()} onClick={() => replyToSupport(ticket)}><Mail size={15} /> Send reply</button></div></div> : <footer className="admin-support-old-actions"><button type="button" className="admin-small-button" disabled={working} onClick={() => reopenSupport(ticket)}>Reopen conversation</button></footer>}</article>)}{!data.supportRequests.some((ticket) => supportView === 'new' ? ticket.status !== 'closed' : ticket.status === 'closed') && <p className="admin-empty">No {supportView === 'new' ? 'new or active' : 'old or closed'} conversations.</p>}</div>
           </section>
         </div>}
 

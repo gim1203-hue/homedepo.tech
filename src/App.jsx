@@ -19,6 +19,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import ErrorReporter from './components/ErrorReporter'
 const Support = lazy(() => import('./pages/Support'))
 const Legal = lazy(() => import('./pages/Legal'))
+const SupportChat = lazy(() => import('./components/SupportChat'))
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -55,7 +56,7 @@ export default function App() {
       <HoverLabels />
       {!isAdminRoute && <Header />}
       <main className={isAdminRoute ? 'admin-main' : undefined}>
-        <Suspense fallback={<section className="container" role="status" aria-live="polite" style={{ paddingBlock: 60 }}>Loading?</section>}>
+        <Suspense fallback={<section className="container" role="status" aria-live="polite" style={{ paddingBlock: 60 }}>Loading…</section>}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/shop" element={<Shop />} />
@@ -76,6 +77,7 @@ export default function App() {
         </Suspense>
       </main>
       {!isAdminRoute && <Footer />}
+      {!isAdminRoute && <Suspense fallback={null}><SupportChat /></Suspense>}
     </div>
   )
 }
