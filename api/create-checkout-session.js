@@ -6,6 +6,7 @@ import { requireSignedInUser } from './_lib/firebaseAdmin.js'
 import { recordErrorReport } from './_lib/firebaseAdmin.js'
 import { verifyProductToken } from './_lib/productToken.js'
 import { validateCart, isAvailable } from './_lib/checkoutCart.js'
+import { siteUrl as currentSiteUrl } from './_lib/siteUrl.js'
 import { isInquiryOnly, getStopShopPrice, serviceFeeCents, SHIPPING_CENTS, SERVICE_FEE_NET_CENTS } from '../src/utils/pricing.js'
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -92,7 +93,7 @@ export default async function handler(request, response) {
   const merchandiseCents = resolved.reduce((total, item) => total + item.unitAmount * item.quantity, 0)
   const feeCents = serviceFeeCents(merchandiseCents + SHIPPING_CENTS)
 
-  const siteUrl = (process.env.SITE_URL || 'https://www.homedepo.tech').replace(/\/$/, '')
+  const siteUrl = currentSiteUrl()
 
   try {
     const session = await stripe.checkout.sessions.create({

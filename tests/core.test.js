@@ -212,3 +212,11 @@ test('chat assistant validates chats, searches products only, and escalates once
   const refusing = { beta: { messages: { toolRunner: async () => ({ stop_reason: 'refusal', content: [] }) } } }
   assert.match((await runShopAssistant({ db, messages: [{ role: 'user', content: 'x' }], client: refusing })).reply, /support@homedepo\.tech/)
 })
+
+test('preview deployments send buyers back to the preview, production to SITE_URL', async () => {
+  const { siteUrl } = await import('../api/_lib/siteUrl.js')
+  assert.equal(siteUrl({ VERCEL_ENV: 'preview', VERCEL_BRANCH_URL: 'shop-git-feature.vercel.app', VERCEL_URL: 'shop-abc.vercel.app', SITE_URL: 'https://www.homedepo.tech' }), 'https://shop-git-feature.vercel.app')
+  assert.equal(siteUrl({ VERCEL_ENV: 'preview', VERCEL_URL: 'shop-abc.vercel.app' }), 'https://shop-abc.vercel.app')
+  assert.equal(siteUrl({ VERCEL_ENV: 'production', VERCEL_URL: 'shop-abc.vercel.app', SITE_URL: 'https://www.homedepo.tech/' }), 'https://www.homedepo.tech')
+  assert.equal(siteUrl({}), 'https://www.homedepo.tech')
+})

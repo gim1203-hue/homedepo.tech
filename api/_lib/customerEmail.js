@@ -1,7 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { emailAddress } from './email.js'
+import { siteUrl } from './siteUrl.js'
 
-const siteUrl = () => (process.env.SITE_URL || 'https://www.homedepo.tech').replace(/\/$/, '')
 
 export const ORDER_STATUSES = {
   ready_to_purchase: 'Processing',
