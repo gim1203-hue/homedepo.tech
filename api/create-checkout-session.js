@@ -6,7 +6,7 @@ import { requireSignedInUser } from './_lib/firebaseAdmin.js'
 import { recordErrorReport } from './_lib/firebaseAdmin.js'
 import { verifyProductToken } from './_lib/productToken.js'
 import { validateCart, isAvailable } from './_lib/checkoutCart.js'
-import { getStopShopPrice, serviceFeeCents, SHIPPING_CENTS, SERVICE_FEE_NET_CENTS } from '../src/utils/pricing.js'
+import { isInquiryOnly, getStopShopPrice, serviceFeeCents, SHIPPING_CENTS, SERVICE_FEE_NET_CENTS } from '../src/utils/pricing.js'
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
@@ -78,6 +78,11 @@ export default async function handler(request, response) {
       return response.status(503).json({ error: 'The product catalog is temporarily unavailable' })
     }
   }
+  const vehicle = cart.find((item) => {
+    const catalogProduct = catalog.find((product) => String(product.id) === String(item.id))
+    return isInquiryOnly(catalogProduct || verifyProductToken(item.checkoutToken) || {})
+  })
+  if (vehicle) return response.status(400).json({ error: 'Cars and motorcycles cannot be bought online. Remove them from your bag and use Request info on the listing.' })
   const resolved = cart.map((item) => resolveCartItem(item, catalog))
 
   if (!resolved.length || resolved.some((item) => !item || !Number.isSafeInteger(item.unitAmount) || item.unitAmount < 50)) {

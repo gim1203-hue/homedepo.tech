@@ -15,7 +15,8 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import ProductCard from '../components/ProductCard'
 import { useStore } from '../context/StoreContext'
 import { useCatalog } from '../context/CatalogContext'
-import { getProductPrice } from '../utils/pricing'
+import { getProductPrice, inquiryLink, isInquiryOnly } from '../utils/pricing'
+import { formatCurrency } from '../utils/format'
 import NotFound from './NotFound'
 
 function ProductSeo({ product, price }) {
@@ -140,6 +141,11 @@ export default function ProductDetails() {
               {product.reviews} reviews
             </div>
 
+            <p className="detail-price">
+              {formatCurrency(askKhanPrice)}
+              {isInquiryOnly(product) && <small> asking price</small>}
+            </p>
+
             <p className="detail-description">
               {product.description}
             </p>
@@ -151,7 +157,11 @@ export default function ProductDetails() {
               </strong>
             </div>
 
-            {product.stock ? (
+            {isInquiryOnly(product) ? (
+              <span className="stock in-stock">
+                ● Available — request info for details
+              </span>
+            ) : product.stock ? (
               <span className="stock in-stock">
                 ● In stock — ready to ship
               </span>
@@ -161,7 +171,9 @@ export default function ProductDetails() {
               </span>
             )}
 
-            <div className="purchase-row">
+            {isInquiryOnly(product) ? <div className="purchase-row">
+              <Link className="button dark add-button" to={inquiryLink(product)}>Request info</Link>
+            </div> : <div className="purchase-row">
               <div className="quantity">
                 <button
                   type="button"
@@ -232,16 +244,16 @@ export default function ProductDetails() {
                   }
                 />
               </button>
-            </div>
+            </div>}
 
             <div className="delivery-notes">
               <div>
                 <Truck />
                 <span>
                   <strong>
-                    Shipping
+                    {isInquiryOnly(product) ? 'Pickup or delivery' : 'Shipping'}
                   </strong>
-                  $9 standard U.S. shipping · 5–10 business days
+                  {isInquiryOnly(product) ? 'Asking price. Vehicles are not sold online — request info for availability, VIN, history, inspection and pickup or delivery.' : '$9 standard U.S. shipping · 5–10 business days'}
                 </span>
               </div>
 
@@ -249,9 +261,9 @@ export default function ProductDetails() {
                 <ShieldCheck />
                 <span>
                   <strong>
-                    30-day returns
+                    {isInquiryOnly(product) ? 'Verify before you buy' : '30-day returns'}
                   </strong>
-                  Simple and stress-free
+                  {isInquiryOnly(product) ? 'Confirm title, VIN, and inspection first' : 'Simple and stress-free'}
                 </span>
               </div>
             </div>

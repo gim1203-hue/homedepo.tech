@@ -6,7 +6,7 @@ import {
 import { Link } from 'react-router-dom'
 import { useStore } from '../context/StoreContext'
 import { formatCurrency } from '../utils/format'
-import { getProductPrice } from '../utils/pricing'
+import { getProductPrice, inquiryLink, isInquiryOnly } from '../utils/pricing'
 
 export default function ProductCard({
   product,
@@ -80,7 +80,7 @@ export default function ProductCard({
           {productImage}
         </Link>
 
-        {!available && (
+        {!available && !isInquiryOnly(product) && (
           <span className="sold-badge">
             Sold out
           </span>
@@ -109,7 +109,11 @@ export default function ProductCard({
           />
         </button>
 
-        <button
+        {isInquiryOnly(product) ? (
+          <Link className="quick-add" to={inquiryLink(product)}>
+            Request info
+          </Link>
+        ) : <button
           type="button"
           disabled={!available}
           className="quick-add"
@@ -122,7 +126,7 @@ export default function ProductCard({
           {available
             ? 'Quick add'
             : 'Unavailable'}
-        </button>
+        </button>}
       </div>
 
       <div className="product-card-info">

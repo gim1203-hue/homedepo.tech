@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { useAuth } from './AuthContext'
 import { useCatalog } from './CatalogContext'
 import { readSaved, writeSaved, validCart, validFavorites } from '../utils/storage'
-import { getProductPrice } from '../utils/pricing'
+import { getProductPrice, isInquiryOnly } from '../utils/pricing'
 
 const StoreContext = createContext(null)
 
@@ -16,7 +16,7 @@ function CustomerStore({ children, owner }) {
   const { products } = useCatalog()
   const cartKey = owner === 'guest' ? 'shopsphere-cart' : `shopsphere-cart:${owner}`
   const favoritesKey = owner === 'guest' ? 'shopsphere-favorites' : `shopsphere-favorites:${owner}`
-  const [cart, setCart] = useState(() => readSaved(cartKey, readSaved('shopsphere-cart', [], validCart), validCart))
+  const [cart, setCart] = useState(() => readSaved(cartKey, readSaved('shopsphere-cart', [], validCart), validCart).filter((item) => !isInquiryOnly(item)))
   const [favorites, setFavorites] = useState(() => readSaved(favoritesKey, readSaved('shopsphere-favorites', [], validFavorites), validFavorites))
   const [notice, setNotice] = useState('')
 
@@ -48,6 +48,7 @@ function CustomerStore({ children, owner }) {
   }, [notice])
 
 const addToCart = (product, quantity = 1) => {
+  if (isInquiryOnly(product)) return
   const stock =
     product.externalUrl
       ? 10

@@ -29,6 +29,7 @@ export function signProduct(product) {
   const payload = encrypt({
     id: product.id,
     name: product.name,
+    category: product.category,
     sourcePrice: product.sourcePrice,
     image: product.image,
     source: product.brand,

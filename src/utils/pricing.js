@@ -40,3 +40,15 @@ export function serviceFeeCents(chargeableCents) {
 export function orderServiceFee(subtotalDollars) {
   return serviceFeeCents(Math.round(Number(subtotalDollars || 0) * 100) + SHIPPING_CENTS) / 100
 }
+
+// Vehicles are listed for inquiries only: no cart or card checkout. Title,
+// VIN, inspection, registration and transport have to be arranged directly.
+export const INQUIRY_ONLY_CATEGORIES = ['Cars & Trucks', 'Motorcycles & Powersports']
+
+export function isInquiryOnly(product = {}) {
+  return INQUIRY_ONLY_CATEGORIES.includes(product.category)
+}
+
+export function inquiryLink(product = {}) {
+  return `/support?type=${encodeURIComponent('Vehicle inquiry')}&product=${encodeURIComponent(product.name || '')}`
+}

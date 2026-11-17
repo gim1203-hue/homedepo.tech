@@ -131,3 +131,15 @@ test('public products never expose merchant details', async () => {
   assert.equal(product.sellerEmail, '')
   assert.ok(!JSON.stringify(product).toLowerCase().includes('walmart'))
 })
+
+test('vehicles are inquiry-only and status emails mention tracking', async () => {
+  const { isInquiryOnly, inquiryLink } = await import('../src/utils/pricing.js')
+  assert.equal(isInquiryOnly({ category: 'Cars & Trucks' }), true)
+  assert.equal(isInquiryOnly({ category: 'Motorcycles & Powersports' }), true)
+  assert.equal(isInquiryOnly({ category: 'Tools & Hardware' }), false)
+  assert.match(inquiryLink({ name: 'Sedan' }), /type=Vehicle%20inquiry&product=Sedan/)
+  const { statusEmail, ORDER_STATUSES } = await import('../api/_lib/customerEmail.js')
+  assert.match(statusEmail('shipped', { number: 'ABC', carrier: 'UPS', trackingNumber: '1Z9' }).text, /UPS[\s\S]*1Z9/)
+  assert.equal(statusEmail('ordered_from_merchant', { number: 'ABC' }), null)
+  assert.equal(ORDER_STATUSES.delivered, 'Delivered')
+})
