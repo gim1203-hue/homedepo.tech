@@ -62,7 +62,7 @@ export function CatalogProvider({
     useState(initialProducts)
 
   const [loading, setLoading] =
-    useState(false)
+    useState(true)
 
   const addProducts = useCallback((newProducts) => {
     if (!Array.isArray(newProducts) || !newProducts.length) return
@@ -92,12 +92,12 @@ export function CatalogProvider({
 
       setProducts(
         mergeProducts(
-          initialProducts,
+          [],
           remoteProducts
         )
       )
     } catch {
-      setProducts(initialProducts)
+      // Keep the last known catalog when a refresh fails.
     } finally {
       setLoading(false)
     }
@@ -110,7 +110,7 @@ export function CatalogProvider({
       .then((response) =>
         response.ok
           ? response.json()
-          : null
+          : Promise.reject(new Error('Catalog unavailable'))
       )
       .then((data) => {
         if (cancelled) return
@@ -122,7 +122,7 @@ export function CatalogProvider({
 
         setProducts(
           mergeProducts(
-            initialProducts,
+            [],
             remoteProducts
           )
         )
@@ -132,6 +132,7 @@ export function CatalogProvider({
           setProducts(initialProducts)
         }
       })
+      .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => {
       cancelled = true

@@ -9,6 +9,7 @@ export async function searchProducts(
   {
     category = 'All',
     start = 0,
+    signal,
   } = {}
 ) {
   const cleanQuery =
@@ -36,7 +37,8 @@ export async function searchProducts(
 
   const response =
     await fetch(
-      `/api/products?${params.toString()}`
+      `/api/products?${params.toString()}`,
+      { signal }
     )
 
   let data

@@ -1,26 +1,31 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { useAuth } from './AuthContext'
 import { useCatalog } from './CatalogContext'
+import { readSaved, writeSaved, validCart, validFavorites } from '../utils/storage'
+import { getProductPrice } from '../utils/pricing'
 
 const StoreContext = createContext(null)
 
-const readSaved = (key, fallback) => {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback } catch { return fallback }
-}
-
 export function StoreProvider({ children }) {
   const { session } = useAuth()
+  return <CustomerStore key={session?.uid || 'guest'} owner={session?.uid || 'guest'}>{children}</CustomerStore>
+}
+
+function CustomerStore({ children, owner }) {
+  const { session } = useAuth()
   const { products } = useCatalog()
-  const [cart, setCart] = useState(() => readSaved('shopsphere-cart', []))
-  const [favorites, setFavorites] = useState(() => readSaved('shopsphere-favorites', []))
+  const cartKey = owner === 'guest' ? 'shopsphere-cart' : `shopsphere-cart:${owner}`
+  const favoritesKey = owner === 'guest' ? 'shopsphere-favorites' : `shopsphere-favorites:${owner}`
+  const [cart, setCart] = useState(() => readSaved(cartKey, readSaved('shopsphere-cart', [], validCart), validCart))
+  const [favorites, setFavorites] = useState(() => readSaved(favoritesKey, readSaved('shopsphere-favorites', [], validFavorites), validFavorites))
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
-    localStorage.setItem('shopsphere-cart', JSON.stringify(cart))
-  }, [cart])
+    writeSaved(cartKey, cart)
+  }, [cart, cartKey])
   useEffect(() => {
-    localStorage.setItem('shopsphere-favorites', JSON.stringify(favorites))
-  }, [favorites])
+    writeSaved(favoritesKey, favorites)
+  }, [favorites, favoritesKey])
   useEffect(() => {
     if (!session) return undefined
     session.getIdToken()
@@ -48,9 +53,9 @@ const addToCart = (product, quantity = 1) => {
       ? 10
       : product.stock === undefined
       ? 10
-      : Math.max(0, Number(product.stock))
+      : Math.min(10, Math.max(0, Number(product.stock)))
 
-  if (stock <= 0) return
+  if (!Number.isFinite(stock) || stock <= 0 || !Number.isInteger(quantity) || quantity < 1) return
 
   setCart((current) => {
     const existing = current.find(
@@ -89,8 +94,8 @@ const addToCart = (product, quantity = 1) => {
 
   const updateQuantity = (id, quantity) => setCart((current) => current.map((item) => {
     if (String(item.id) !== String(id)) return item
-    const stock = item.externalUrl ? 10 : Math.max(1, Number(item.stock) || 10)
-    return { ...item, quantity: Math.max(1, Math.min(quantity, stock)) }
+    const stock = item.externalUrl ? 10 : Math.min(10, Math.max(1, Number(item.stock) || 10))
+    return { ...item, quantity: Math.max(1, Math.min(Math.floor(Number(quantity) || 1), stock)) }
   }))
   const removeFromCart = (id) => setCart((current) => current.filter((item) => item.id !== id))
   const clearCart = useCallback(() => setCart([]), [])
@@ -101,7 +106,7 @@ const addToCart = (product, quantity = 1) => {
   }
 
   const cartCount = cart.reduce((total, item) => total + item.quantity, 0)
-  const subtotal = cart.reduce((total, item) => total + item.price * item.quantity, 0)
+  const subtotal = cart.reduce((total, item) => total + getProductPrice(item) * item.quantity, 0)
   const favoriteProducts = products.filter((product) => favorites.includes(product.id))
   const value = { cart, favorites, favoriteProducts, notice, cartCount, subtotal, addToCart, updateQuantity, removeFromCart, clearCart, toggleFavorite }
 

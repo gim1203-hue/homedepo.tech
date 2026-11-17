@@ -28,8 +28,9 @@ export default async function handler(request, response) {
       return response.status(400).json({ error: 'Only completed paid orders can be refunded.' })
     }
 
-    const intent = await stripe.paymentIntents.retrieve(paymentIntent)
-    if (intent.amount_received <= 0 || intent.amount_received <= intent.amount_refunded) {
+    const intent = await stripe.paymentIntents.retrieve(paymentIntent, { expand: ['latest_charge'] })
+    const charge = intent.latest_charge
+    if (intent.amount_received <= 0 || (charge && typeof charge === 'object' && charge.amount_refunded >= charge.amount)) {
       return response.status(409).json({ error: 'This order has already been refunded.' })
     }
 

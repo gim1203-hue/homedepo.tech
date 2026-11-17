@@ -39,7 +39,7 @@ export async function requireSignedInUser(request) {
 
   const { auth, db } = getFirebaseServices()
   try {
-    const user = await auth.verifyIdToken(token)
+    const user = await auth.verifyIdToken(token, true)
     return { user, auth, db }
   } catch {
     const error = new Error('Your sign-in has expired. Sign in again.')

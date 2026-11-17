@@ -59,12 +59,13 @@ export default function Shop() {
     }
 
     let cancelled = false
+    const controller = new AbortController()
     const timer = window.setTimeout(async () => {
       setSearching(true)
       setSearchMessage('')
 
       try {
-        const results = await searchProducts(cleanQuery, { category })
+        const results = await searchProducts(cleanQuery, { category, signal: controller.signal })
         if (!cancelled) {
           setLiveProducts(results.products)
           addProducts(results.products)
@@ -83,6 +84,7 @@ export default function Shop() {
 
     return () => {
       cancelled = true
+      controller.abort()
       window.clearTimeout(timer)
     }
   }, [addProducts, category, query])

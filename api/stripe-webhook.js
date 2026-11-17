@@ -1,8 +1,9 @@
 import Stripe from 'stripe'
-import { FieldValue, Timestamp } from 'firebase-admin/firestore'
+import { FieldValue } from 'firebase-admin/firestore'
 import { getFirebaseServices, recordErrorReport } from './_lib/firebaseAdmin.js'
-import { invoiceNumber } from './_lib/order.js'
+import { notifyFulfillment, retrieveFullSession, savePaidOrder as persistPaidOrder } from './_lib/paidOrder.js'
 import { emailAddress } from './_lib/email.js'
+import { notifyCustomerOrderPlaced } from './_lib/customerEmail.js'
 
 export const config = { api: { bodyParser: false } }
 
@@ -17,7 +18,7 @@ async function readRawBody(request) {
 }
 
 async function savePaidOrder(sessionId) {
-  const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['line_items', 'payment_intent.latest_charge'] })
+  const session = await retrieveFullSession(stripe, sessionId)
   if (session.payment_status !== 'paid') return
 
   const userId = String(session.metadata?.userId || session.client_reference_id || '')
@@ -29,7 +30,7 @@ async function savePaidOrder(sessionId) {
     if (!originalSessionId.startsWith('cs_')) throw new Error(`Supplemental invoice ${session.id} has no original order`)
     const fulfillmentRef = db.collection('fulfillmentOrders').doc(originalSessionId)
     const customerOrderRef = db.collection('customers').doc(userId).collection('orders').doc(originalSessionId)
-    const [fulfillmentDocument, customerOrderDocument] = await Promise.all([fulfillmentRef.get(), customerOrderRef.get()])
+    const fulfillmentDocument = await fulfillmentRef.get()
     const charge = typeof session.payment_intent === 'object' && typeof session.payment_intent?.latest_charge === 'object' ? session.payment_intent.latest_charge : null
     const updateInvoices = (document) => (document.data()?.supplementalInvoices || []).map((invoice) => invoice.id === session.id ? {
       ...invoice,
@@ -37,72 +38,32 @@ async function savePaidOrder(sessionId) {
       amountTax: session.total_details?.amount_tax || 0,
       amountTotal: session.amount_total || 0,
       receiptUrl: charge?.receipt_url || '',
-      paidAt: new Date().toISOString(),
+      paidAt: invoice.paidAt || new Date(session.created * 1000).toISOString(),
     } : invoice)
-    await Promise.all([
-      fulfillmentRef.set({ supplementalInvoices: updateInvoices(fulfillmentDocument), updatedAt: FieldValue.serverTimestamp() }, { merge: true }),
-      customerOrderRef.set({ supplementalInvoices: updateInvoices(customerOrderDocument), updatedAt: FieldValue.serverTimestamp() }, { merge: true }),
-    ])
+    await db.runTransaction(async (transaction) => {
+      const [fulfillment, customerOrder] = await Promise.all([transaction.get(fulfillmentRef), transaction.get(customerOrderRef)])
+      transaction.set(fulfillmentRef, { supplementalInvoices: updateInvoices(fulfillment), updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+      transaction.set(customerOrderRef, { supplementalInvoices: updateInvoices(customerOrder), updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+    })
     const customerEmail = emailAddress(session.customer_details?.email || session.customer_email || fulfillmentDocument.data()?.customerEmail)
     if (customerEmail && charge?.receipt_url && process.env.RESEND_API_KEY && process.env.FROM_EMAIL) {
       const subject = `Receipt for StopShop order ${originalSessionId.slice(-10).toUpperCase()}`
       const text = `Your additional payment was received.\n\nAmount paid: $${((session.amount_total || 0) / 100).toFixed(2)}\nSales tax: $${((session.total_details?.amount_tax || 0) / 100).toFixed(2)}\n\nView your official Stripe receipt: ${charge.receipt_url}\n\nThis receipt is also saved under Orders in your StopShop account.`
       try {
-        const emailResponse = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from: process.env.FROM_EMAIL, to: [customerEmail], subject, text, reply_to: emailAddress(process.env.SUPPORT_REPLY_TO) || undefined }) })
+        const emailResponse = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json', 'Idempotency-Key': `supplemental-receipt-${session.id}` }, body: JSON.stringify({ from: process.env.FROM_EMAIL, to: [customerEmail], subject, text, reply_to: emailAddress(process.env.SUPPORT_REPLY_TO) || undefined }) })
         const emailResult = await emailResponse.json().catch(() => ({}))
-        if (emailResponse.ok) await db.collection('customerMessages').add({ uid: userId, email: customerEmail, resendId: emailResult.id || '', subject, text, source: 'supplemental_receipt', createdAt: FieldValue.serverTimestamp() })
+        if (!emailResponse.ok) throw new Error(`Receipt email failed: HTTP ${emailResponse.status}`)
+        await db.collection('customerMessages').doc(`supplemental-${session.id}`).set({ uid: userId, email: customerEmail, resendId: emailResult.id || '', subject, text, source: 'supplemental_receipt', createdAt: FieldValue.serverTimestamp() }, { merge: true })
       } catch (emailError) {
         await recordErrorReport({ source: 'supplemental-receipt-email', message: emailError.message, user: userId }).catch(() => {})
+        throw emailError
       }
     }
     return
   }
-  const shipping = session.collected_information?.shipping_details || session.shipping_details || null
-  const paidAt = Timestamp.fromMillis((session.created || Math.floor(Date.now() / 1000)) * 1000)
-  const order = {
-    stripeSessionId: session.id,
-    number: session.id.slice(-10).toUpperCase(),
-    invoiceNumber: invoiceNumber(session.id, session.created),
-    status: 'processing',
-    paymentStatus: session.payment_status,
-    email: session.customer_details?.email || session.customer_email || '',
-    amountSubtotal: session.amount_subtotal || 0,
-    amountShipping: session.total_details?.amount_shipping || 0,
-    amountTax: session.total_details?.amount_tax || 0,
-    amountDiscount: session.total_details?.amount_discount || 0,
-    amountTotal: session.amount_total || 0,
-    currency: session.currency || 'usd',
-    items: (session.line_items?.data || []).map((item) => ({
-      name: item.description || 'Purchased item',
-      quantity: item.quantity || 1,
-      amountTotal: item.amount_total || 0,
-    })),
-    shippingAddress: shipping ? { name: shipping.name || '', ...shipping.address } : null,
-    shipsFrom: 'StopShop fulfillment network, United States',
-    createdAt: paidAt,
-    updatedAt: FieldValue.serverTimestamp(),
-  }
-
-  await Promise.all([
-    db.collection('customers').doc(userId).collection('orders').doc(session.id).set(order, { merge: true }),
-    db.collection('fulfillmentOrders').doc(session.id).set({
-      userId,
-      customerName: session.customer_details?.name || shipping?.name || '',
-      customerEmail: order.email,
-      customerPhone: session.customer_details?.phone || '',
-      shippingAddress: order.shippingAddress,
-      paymentStatus: session.payment_status,
-      invoiceNumber: order.invoiceNumber,
-      fulfillmentStatus: 'ready_to_purchase',
-      amountSubtotal: session.amount_subtotal || 0,
-      amountShipping: session.total_details?.amount_shipping || 0,
-      amountTax: session.total_details?.amount_tax || 0,
-      amountTotal: session.amount_total || 0,
-      currency: session.currency || 'usd',
-      paidAt,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true }),
-  ])
+  await persistPaidOrder(db, userId, session)
+  await notifyFulfillment(db, session)
+  await notifyCustomerOrderPlaced(db, session).catch((error) => recordErrorReport({ source: 'order-confirmation-email', message: error.message, user: userId }).catch(() => {}))
 }
 
 export default async function handler(request, response) {
@@ -123,6 +84,6 @@ export default async function handler(request, response) {
   } catch (error) {
     console.error('Stripe webhook failed:', error.message)
     await recordErrorReport({ source: 'stripe-webhook', message: error.message }).catch(() => {})
-    return response.status(400).json({ error: 'Webhook could not be processed' })
+    return response.status(error.type === 'StripeSignatureVerificationError' ? 400 : 500).json({ error: 'Webhook could not be processed' })
   }
 }

@@ -4,9 +4,9 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
-  { ignores: ['dist'] },
+  { ignores: ['dist', 'old-files'] },
   {
-    files: ['api/**/*.js'],
+    files: ['api/**/*.js', 'tests/**/*.js', 'playwright.config.js'],
     languageOptions: { ecmaVersion: 2022, globals: globals.node, sourceType: 'module' },
   },
   {

@@ -1,7 +1,8 @@
 import Stripe from 'stripe'
-import { FieldValue, Timestamp } from 'firebase-admin/firestore'
+import { FieldValue } from 'firebase-admin/firestore'
 import { recordErrorReport, requireSignedInUser, sendApiError } from './_lib/firebaseAdmin.js'
 import { invoiceNumber } from './_lib/order.js'
+import { retrieveFullSession, savePaidOrder } from './_lib/paidOrder.js'
 
 const clean = (value, limit = 120) => String(value || '').trim().slice(0, limit)
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -9,34 +10,9 @@ const stripe = process.env.STRIPE_SECRET_KEY
   : null
 
 async function savePaidSession(db, userId, session) {
-  const sessionUserId = String(session.metadata?.userId || session.client_reference_id || '')
-  if (session.payment_status !== 'paid' || sessionUserId !== userId) return false
-
-  const shipping = session.collected_information?.shipping_details || session.shipping_details || null
-  const createdAt = Timestamp.fromMillis((session.created || Math.floor(Date.now() / 1000)) * 1000)
-  const order = {
-    stripeSessionId: session.id,
-    number: session.id.slice(-10).toUpperCase(),
-    invoiceNumber: invoiceNumber(session.id, session.created),
-    status: 'processing',
-    paymentStatus: 'paid',
-    email: session.customer_details?.email || session.customer_email || '',
-    amountSubtotal: session.amount_subtotal || 0,
-    amountShipping: session.total_details?.amount_shipping || 0,
-    amountTax: session.total_details?.amount_tax || 0,
-    amountDiscount: session.total_details?.amount_discount || 0,
-    amountTotal: session.amount_total || 0,
-    currency: session.currency || 'usd',
-    items: (session.line_items?.data || []).map((item) => ({ name: item.description || 'Purchased item', quantity: item.quantity || 1, amountTotal: item.amount_total || 0 })),
-    shippingAddress: shipping ? { name: shipping.name || '', ...shipping.address } : null,
-    shipsFrom: 'StopShop fulfillment network, United States',
-    createdAt,
-    updatedAt: FieldValue.serverTimestamp(),
-  }
-
-  await db.collection('customers').doc(userId).collection('orders').doc(session.id).set(order, { merge: true })
-  await db.collection('fulfillmentOrders').doc(session.id).set({ userId, paymentStatus: 'paid', fulfillmentStatus: 'ready_to_purchase', paidAt: createdAt, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
-  return true
+  if (session.payment_status !== 'paid' || String(session.metadata?.userId || session.client_reference_id || '') !== userId) return false
+  const complete = await retrieveFullSession(stripe, session.id)
+  return savePaidOrder(db, userId, complete)
 }
 
 async function reconcilePaidOrders(db, userId, existingOrderIds) {

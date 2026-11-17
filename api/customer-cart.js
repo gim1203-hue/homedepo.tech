@@ -10,10 +10,10 @@ export default async function handler(request, response) {
   try {
     const { user, db } = await requireSignedInUser(request)
     const items = Array.isArray(request.body?.items)
-      ? request.body.items.slice(0, 50).map((item) => ({
+      ? request.body.items.slice(0, 50).filter((item) => item && typeof item === 'object').map((item) => ({
           id: String(item.id ?? '').slice(0, 100),
           name: String(item.name ?? 'Product').slice(0, 120),
-          quantity: Math.max(1, Math.min(Number(item.quantity) || 1, 20)),
+          quantity: Math.max(1, Math.min(Math.floor(Number(item.quantity) || 1), 10)),
           image: typeof item.image === 'string' && item.image.startsWith('https://')
             ? item.image.slice(0, 1000)
             : '',

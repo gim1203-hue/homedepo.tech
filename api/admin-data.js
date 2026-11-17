@@ -19,21 +19,19 @@ export default async function handler(request, response) {
       const cursorDocument = await db.collection('errorReports').doc(errorCursor).get()
       if (cursorDocument.exists) errorsQuery = errorsQuery.startAfter(cursorDocument)
     }
-    const [usersPage, cartsSnapshot, messagesSnapshot, inboundSnapshot, hiddenEmailsSnapshot, passwordResetSnapshot, supportSnapshot, catalog, errorsSnapshot, refundsSnapshot] = await Promise.all([
-      auth.listUsers(100, customerCursor || undefined),
-      db.collection('customerCarts').get(),
+    const usersPage = await auth.listUsers(100, customerCursor || undefined)
+    const cartDocuments = usersPage.users.length ? await db.getAll(...usersPage.users.map((user) => db.collection('customerCarts').doc(user.uid))) : []
+    const cartsSnapshot = { docs: cartDocuments.filter((document) => document.exists) }
+    const [ messagesSnapshot, inboundSnapshot, passwordResetSnapshot, supportSnapshot, catalog, errorsSnapshot] = await Promise.all([
       db.collection('customerMessages').orderBy('createdAt', 'desc').limit(100).get(),
       db.collection('inboundEmails').orderBy('createdAt', 'desc').limit(100).get(),
-      db.collection('hiddenAdminEmails').get(),
       db.collection('passwordResetRequests').orderBy('createdAt', 'desc').limit(100).get(),
       db.collection('supportRequests').orderBy('createdAt', 'desc').limit(100).get(),
       loadCatalog(db),
       errorsQuery.limit(50).get(),
-      db.collection('storeRefunds').get(),
     ])
 
     const cartsByUid = new Map(cartsSnapshot.docs.map((document) => [document.id, document.data().items || []]))
-    const refundsBySession = new Map(refundsSnapshot.docs.map((document) => [document.id, document.data()]))
     const customers = usersPage.users.map((user) => ({
       uid: user.uid,
       name: user.displayName || '',
@@ -56,6 +54,8 @@ export default async function handler(request, response) {
         ? await db.getAll(...sessions.data.map((session) => db.collection('fulfillmentOrders').doc(session.id)))
         : []
       const fulfillmentBySession = new Map(fulfillmentDocuments.filter((document) => document.exists).map((document) => [document.id, document.data()]))
+      const refundDocuments = sessions.data.length ? await db.getAll(...sessions.data.map((session) => db.collection('storeRefunds').doc(session.id))) : []
+      const refundsBySession = new Map(refundDocuments.filter((document) => document.exists).map((document) => [document.id, document.data()]))
       orders = sessions.data.map((session) => {
         const fulfillment = fulfillmentBySession.get(session.id) || {}
         const stripeShipping = session.collected_information?.shipping_details || session.shipping_details || null
@@ -100,6 +100,9 @@ export default async function handler(request, response) {
           manualTaxCost,
           manualOtherCost,
           estimatedProfit,
+          serviceFee: Number(fulfillment.serviceFeeCents || 0),
+          carrier: fulfillment.carrier || '',
+          trackingNumber: fulfillment.trackingNumber || '',
           currency: session.currency || 'usd',
           paymentStatus: session.payment_status,
           refunded: refundsBySession.has(session.id),
@@ -114,7 +117,7 @@ export default async function handler(request, response) {
       orderNextCursor = sessions.has_more ? sessions.data.at(-1)?.id || null : null
     }
 
-    const hiddenEmailIds = new Set(hiddenEmailsSnapshot.docs.map((document) => document.id))
+    const hiddenEmailIds = new Set()
     const localMessages = messagesSnapshot.docs.map((document) => {
       const message = document.data()
       return {
@@ -159,8 +162,17 @@ export default async function handler(request, response) {
       resendSyncError = syncErrors.join(' ')
     }
 
-    const localResendIds = new Set(localMessages.map((message) => message.resendId).filter(Boolean))
-    const messages = [...localMessages, ...resendSent.filter((email) => !hiddenEmailIds.has(email.id) && !localResendIds.has(email.id)).map((email) => ({
+    const visibleEmailIds = [...new Set([
+      ...messagesSnapshot.docs.flatMap((document) => [document.id, document.data().resendId]),
+      ...inboundSnapshot.docs.map((document) => document.id),
+      ...resendSent.map((email) => email.id), ...resendReceived.map((email) => email.id),
+    ].filter((id) => typeof id === 'string' && id && !id.includes('/')))]
+    const hiddenDocuments = visibleEmailIds.length ? await db.getAll(...visibleEmailIds.map((id) => db.collection('hiddenAdminEmails').doc(id))) : []
+    hiddenDocuments.filter((document) => document.exists).forEach((document) => hiddenEmailIds.add(document.id))
+    const visibleLocalMessages = localMessages.filter((message) => !hiddenEmailIds.has(message.id) && !hiddenEmailIds.has(message.resendId))
+    const visibleStoredInbound = storedInboundEmails.filter((email) => !hiddenEmailIds.has(email.id))
+    const localResendIds = new Set(visibleLocalMessages.map((message) => message.resendId).filter(Boolean))
+    const messages = [...visibleLocalMessages, ...resendSent.filter((email) => !hiddenEmailIds.has(email.id) && !localResendIds.has(email.id)).map((email) => ({
       id: email.id,
       resendId: email.id,
       uid: '',
@@ -172,8 +184,8 @@ export default async function handler(request, response) {
       createdAt: email.created_at || null,
     }))].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
 
-    const storedInboundById = new Map(storedInboundEmails.map((email) => [email.id, email]))
-    const inboundEmails = [...storedInboundEmails, ...resendReceived.filter((email) => !hiddenEmailIds.has(email.id) && !storedInboundById.has(email.id)).map((email) => ({
+    const storedInboundById = new Map(visibleStoredInbound.map((email) => [email.id, email]))
+    const inboundEmails = [...visibleStoredInbound, ...resendReceived.filter((email) => !hiddenEmailIds.has(email.id) && !storedInboundById.has(email.id)).map((email) => ({
       id: email.id,
       from: email.from || 'Unknown sender',
       to: Array.isArray(email.to) ? email.to : [],

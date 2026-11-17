@@ -1,5 +1,5 @@
 import { getFirebaseServices } from './_lib/firebaseAdmin.js'
-import { loadCatalog } from './_lib/catalog.js'
+import { loadCatalog, publicProduct } from './_lib/catalog.js'
 
 export default async function handler(request, response) {
   if (request.method !== 'GET') {
@@ -9,7 +9,7 @@ export default async function handler(request, response) {
 
   try {
     const { db } = getFirebaseServices()
-    const products = await loadCatalog(db)
+    const products = (await loadCatalog(db)).map(publicProduct)
     response.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=120')
     return response.status(200).json({ products })
   } catch (error) {
@@ -17,6 +17,6 @@ export default async function handler(request, response) {
       return response.status(error.statusCode).json({ products: [] })
     }
     console.error('Catalog load failed:', error.message)
-    return response.status(200).json({ products: [] })
+    return response.status(503).json({ error: 'The product catalog is temporarily unavailable' })
   }
 }

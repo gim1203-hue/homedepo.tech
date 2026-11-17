@@ -56,12 +56,12 @@ function ProductSeo({ product, price }) {
 export default function ProductDetails() {
   const { productId } = useParams()
   const location = useLocation()
-  const { products } = useCatalog()
+  const { products, loading } = useCatalog()
 
   const product = products.find(
     (item) =>
       String(item.id) === productId
-  ) || (String(location.state?.product?.id) === productId ? location.state.product : null)
+  ) || (location.state?.product?.checkoutToken && String(location.state.product.id) === productId ? location.state.product : null)
 
   const [quantity, setQuantity] =
     useState(1)
@@ -73,6 +73,7 @@ export default function ProductDetails() {
   } = useStore()
 
   if (!product) {
+    if (loading) return <section className="container" role="status">Loading product…</section>
     return <NotFound compact />
   }
 
@@ -103,7 +104,7 @@ export default function ProductDetails() {
   const saved =
     favorites.includes(product.id)
 
-  const maxQuantity = product.externalUrl ? 10 : Math.max(1, Number(product.stock) || 10)
+  const maxQuantity = product.externalUrl ? 10 : Math.min(10, Math.max(1, Number(product.stock) || 10))
 
   return (
     <>
@@ -262,7 +263,7 @@ export default function ProductDetails() {
 
               <div className="product-facts">
                 <div><Ruler /><span><small>Measurements / dimensions</small><strong>{product.measurements || 'Exact measurements were not provided by the seller.'}</strong></span></div>
-                <div><Store /><span><small>Seller</small><strong>{product.sellerName || product.brand || 'StopShop Marketplace Seller'}</strong><em>{product.sellerEmail || product.sellerContact || 'Contact through StopShop Merchant Support'}</em></span></div>
+                <div><Store /><span><small>Sold by</small><strong>{product.sellerName || 'StopShop Marketplace'}</strong><em>Questions? Contact StopShop support</em></span></div>
               </div>
 
               <h3>Additional details</h3>
@@ -278,7 +279,7 @@ export default function ProductDetails() {
               </ul>
             </div>
 
-            <Link className="button dark contact-seller" to={`/support?type=Product+listing+problem&product=${encodeURIComponent(product.name)}&seller=${encodeURIComponent(product.sellerName || product.brand || '')}`}>Contact seller about this item</Link>
+            <Link className="button dark contact-seller" to={`/support?type=Product+listing+problem&product=${encodeURIComponent(product.name)}`}>Ask StopShop about this item</Link>
             {product.sellerEmail && <a className="button contact-seller" href={`mailto:${product.sellerEmail}?subject=${encodeURIComponent(`Question about ${product.name}`)}`}><Mail size={17} /> Email seller</a>}
 
             {product.externalUrl && <Link className="button light-button original-listing" to={`/shop?q=${encodeURIComponent(product.category || product.name)}`}>View similar products</Link>}

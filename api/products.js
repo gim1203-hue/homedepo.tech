@@ -1,6 +1,8 @@
 const ALLOWED_METHODS = new Set(['GET'])
 import { signProduct } from './_lib/productToken.js'
+import { publicProduct } from './_lib/catalog.js'
 import { recordErrorReport } from './_lib/firebaseAdmin.js'
+import { enforceRateLimit } from './_lib/rateLimit.js'
 
 export default async function handler(request, response) {
   if (!ALLOWED_METHODS.has(request.method)) {
@@ -32,6 +34,7 @@ export default async function handler(request, response) {
   url.searchParams.set('hl', 'en')
 
   try {
+    await enforceRateLimit(request, response, 'product-search', 30)
     const serpResponse = await fetch(url, { signal: AbortSignal.timeout(10000) })
     const data = await serpResponse.json()
 
@@ -54,15 +57,18 @@ export default async function handler(request, response) {
       // per-order quantity while Stripe re-validates the signed product.
       stock: 10,
       featured: false,
-      description: item.snippet || `Available from ${item.source || 'an online retailer'}.`,
+      description: item.snippet || 'Available through the StopShop marketplace.',
       measurements: 'Exact measurements were not provided by the seller.',
       sellerName: item.source || 'Online marketplace seller',
       sellerContact: 'Contact through StopShop Merchant Support',
       sellerEmail: '',
       details: ['Live marketplace result', item.delivery].filter(Boolean),
-      tags: [query, category, item.source, 'live product'].filter(Boolean),
+      tags: [query, category, 'live product'].filter(Boolean),
     })).filter((item) => item.name && item.image && item.sourcePrice > 0)
-      .map((item) => ({ ...item, checkoutToken: signProduct(item) }))
+      .map((item) => {
+        const checkoutToken = signProduct(item)
+        return publicProduct({ ...item, checkoutToken, stock: checkoutToken ? item.stock : 0 })
+      })
 
     response.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600')
     return response.status(200).json({
@@ -72,8 +78,9 @@ export default async function handler(request, response) {
         : null,
     })
   } catch (error) {
+    if (error.statusCode === 429) return response.status(429).json({ error: error.message })
     console.error('SerpApi product search failed:', error.message)
     await recordErrorReport({ source: 'product-search', message: error.message }).catch(() => {})
-    return response.status(502).json({ error: 'Live product search is temporarily unavailable' })
+    return response.status(error.statusCode || 502).json({ error: error.statusCode === 429 ? error.message : 'Live product search is temporarily unavailable' })
   }
 }

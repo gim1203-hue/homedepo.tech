@@ -3,6 +3,7 @@ import { AlertTriangle, ExternalLink, KeyRound, Mail, MapPin, MessageCircle, Pac
 import { useAuth } from '../context/AuthContext'
 import { useCatalog } from '../context/CatalogContext'
 import { formatCurrency } from '../utils/format'
+import { readSaved, writeSaved } from '../utils/storage'
 
 const emptyData = { customers: [], orders: [], products: [], messages: [], inboundEmails: [], supportRequests: [], passwordResetRequests: [], errorReports: [], customerNextCursor: null, orderNextCursor: null, errorNextCursor: null, integrations: null }
 const newProduct = () => ({ id: '', name: '', category: '', price: '', stock: '', image: '', description: '', color: '', measurements: '', sellerName: '', sellerContact: '', sellerEmail: '', featured: false })
@@ -51,7 +52,7 @@ export default function Admin() {
   const { refreshCatalog } = useCatalog()
   const [data, setData] = useState(emptyData)
   const [tab, setTab] = useState(() => {
-    const savedTab = typeof window === 'undefined' ? '' : window.localStorage.getItem('stopshop-dashboard-tab')
+    const savedTab = typeof window === 'undefined' ? '' : readSaved('stopshop-dashboard-tab', '')
     return dashboardTabs.some((item) => item.id === savedTab) ? savedTab : 'overview'
   })
   const [loading, setLoading] = useState(true)
@@ -84,7 +85,7 @@ export default function Admin() {
   }, [loadData, session])
 
   useEffect(() => {
-    window.localStorage.setItem('stopshop-dashboard-tab', tab)
+    writeSaved('stopshop-dashboard-tab', tab)
   }, [tab])
 
   useEffect(() => {
@@ -131,6 +132,20 @@ export default function Admin() {
       setError(pageError.message)
     } finally {
       setLoadingMore(false)
+    }
+  }
+
+  async function updateOrderStatus(order, form) {
+    setWorking(true)
+    setError('')
+    try {
+      const result = await adminRequest(session, '/api/admin-order-status', { method: 'POST', body: { sessionId: order.id, ...form } })
+      setNotice(`Order marked ${String(result.status).replaceAll('_', ' ')}${result.emailed ? ' and the customer was emailed.' : '.'}`)
+      await loadData()
+    } catch (actionError) {
+      setError(actionError.message)
+    } finally {
+      setWorking(false)
     }
   }
 
@@ -370,9 +385,10 @@ export default function Admin() {
           <div className="admin-fulfillment-list">{data.orders.map((order) => <details className="admin-fulfillment-detail" key={`fulfillment-${order.id}`}>
             <summary><span><strong>{order.name || 'Customer'}</strong><small>{order.email || 'Email unavailable'} · Order {order.id.slice(-12)}</small></span><span className="admin-status pending">{String(order.fulfillmentStatus || 'processing').replaceAll('_', ' ')}</span></summary>
             <div className="admin-fulfillment-grid">
-              <article><h4><MapPin size={17} /> Customer and delivery</h4><p><span>Name</span><strong>{order.name || 'Not provided'}</strong></p><p><span>Email</span><strong>{order.email || 'Not provided'}</strong></p><p><span>Phone</span><strong>{order.phone || 'Not provided'}</strong></p><p><span>Ship to</span><strong>{displayAddress(order.shippingAddress)}</strong></p></article>
+              <article><h4><MapPin size={17} /> Customer and delivery</h4><p><span>Name</span><strong>{order.name || 'Not provided'}</strong></p><p><span>Email</span><strong>{order.email || 'Not provided'}</strong></p><p><span>Phone</span><strong>{order.phone || 'Not provided'}</strong></p><p><span>Ship to</span><strong>{displayAddress(order.shippingAddress)}</strong></p><p><span>Customer paid</span><strong>{formatCurrency(order.amount / 100)}</strong></p><p><span>Service fee charged</span><strong>{order.serviceFee ? formatCurrency(order.serviceFee / 100) : '—'}</strong></p><p><span>Merchant cost</span><strong>{formatCurrency(order.supplierCost / 100)}</strong></p><p><span>Estimated profit</span><strong>{formatCurrency(order.estimatedProfit / 100)}</strong></p></article>
               <article><h4><Store size={17} /> Products to purchase</h4>{order.items?.length ? order.items.map((item, index) => <div className="admin-merchant-item" key={`${item.productId}-${index}`}><img src={item.image} alt="" /><div><strong>{item.quantity} × {item.name}</strong><span>Merchant: {item.merchantName || 'Not provided'}</span>{item.merchantEmail && <span>Email: {item.merchantEmail}</span>}{item.merchantContact && <span>Contact: {item.merchantContact}</span>}{item.purchaseUrl ? <a href={item.purchaseUrl} target="_blank" rel="noreferrer">Open merchant product <ExternalLink size={14} /></a> : <span>Merchant product link unavailable</span>}<span>Original merchant price: {formatCurrency(Number(item.sourcePrice || 0))} each</span></div></div>) : <p>No private item details were stored for this order.</p>}</article>
             </div>
+            <OrderStatusForm order={order} working={working} onSave={(form) => updateOrderStatus(order, form)} />
             {order.supplementalInvoices?.length > 0 && <div className="admin-supplemental-list"><strong>Customer invoices</strong>{order.supplementalInvoices.map((invoice) => <p key={invoice.id}><span>{invoice.status === 'paid' ? 'Paid' : 'Payment due'} · {formatCurrency((invoice.status === 'paid' ? invoice.amountTotal : invoice.amountBeforeTax) / 100)}{invoice.status === 'paid' ? '' : ' before tax'}</span><a href={invoice.status === 'paid' && invoice.receiptUrl ? invoice.receiptUrl : invoice.paymentUrl} target="_blank" rel="noreferrer">{invoice.status === 'paid' ? 'Open receipt' : 'Open payment link'} <ExternalLink size={13} /></a></p>)}</div>}
             <div className="admin-receipt-actions">{order.paymentIntent && <a className="admin-primary" href={order.stripeUrl} target="_blank" rel="noreferrer">Open payment in Stripe <ExternalLink size={14} /></a>}{order.receiptUrl && <a className="admin-small-button" href={order.receiptUrl} target="_blank" rel="noreferrer"><ReceiptText size={14} /> Original customer receipt</a>}</div>
           </details>)}</div>
@@ -394,7 +410,7 @@ export default function Admin() {
         {tab === 'products' && <section className="admin-panel">
           <div className="admin-panel-heading"><div><h2>Product catalog</h2><p>Changes are saved to Firestore and used by the storefront.</p></div><button type="button" className="admin-primary" onClick={() => setProductForm(newProduct())}><Plus size={16} /> Add product</button></div>
           <div className="admin-table-wrap"><table><thead><tr><th>Product</th><th>Category</th><th>Selling price</th><th>Supplier cost</th><th>Profit / item</th><th>Rating</th><th>Stock</th><th /></tr></thead><tbody>
-            {data.products.map((product) => { const supplierPrice = Number(product.sourcePrice ?? product.price ?? 0); const sellingPrice = Number(product.price || 0); return <tr key={product.id}><td className="admin-product-cell"><img src={product.image} alt="" /><strong>{product.name}</strong></td><td>{product.category}</td><td>{formatCurrency(sellingPrice)}</td><td>{formatCurrency(supplierPrice)}</td><td><strong>{formatCurrency(sellingPrice - supplierPrice)}</strong><small>Before tax, card, shipping & other costs</small></td><td>{Number(product.reviews) > 0 ? `${Number(product.rating).toFixed(1)} (${product.reviews})` : 'No verified ratings'}</td><td>{product.stock ?? '—'}</td><td className="admin-actions"><button type="button" className="admin-small-button" onClick={() => setProductForm({ ...product, price: String(product.sourcePrice ?? product.price), stock: String(product.stock ?? 0) })}>Edit</button><button type="button" className="admin-small-button danger" disabled={working} onClick={() => deleteProduct(product)}>Remove</button></td></tr> })}
+            {data.products.map((product) => { const supplierPrice = Number(product.sourcePrice ?? product.price ?? 0); const sellingPrice = Number(product.price || 0); return <tr key={product.id}><td className="admin-product-cell"><img src={product.image} alt="" /><strong>{product.name}</strong></td><td>{product.category}</td><td>{formatCurrency(sellingPrice)}</td><td>{formatCurrency(supplierPrice)}</td><td><strong>{formatCurrency(sellingPrice - supplierPrice)}</strong><small>Customers pay the original price; you earn $5 net per order from the service fee</small></td><td>{Number(product.reviews) > 0 ? `${Number(product.rating).toFixed(1)} (${product.reviews})` : 'No verified ratings'}</td><td>{product.stock ?? '—'}</td><td className="admin-actions"><button type="button" className="admin-small-button" onClick={() => setProductForm({ ...product, price: String(product.sourcePrice ?? product.price), stock: String(product.stock ?? 0) })}>Edit</button><button type="button" className="admin-small-button danger" disabled={working} onClick={() => deleteProduct(product)}>Remove</button></td></tr> })}
           </tbody></table></div>
         </section>}
 
@@ -437,4 +453,27 @@ export default function Admin() {
       </div>}
     </section>
   )
+}
+
+const ORDER_STATUS_OPTIONS = [
+  ['ready_to_purchase', 'Paid — buy from merchant'],
+  ['ordered_from_merchant', 'Ordered from merchant'],
+  ['shipped', 'Shipped (emails customer)'],
+  ['delivered', 'Delivered (emails customer)'],
+  ['cancelled', 'Cancelled (emails customer)'],
+]
+
+function OrderStatusForm({ order, working, onSave }) {
+  const [status, setStatus] = useState(ORDER_STATUS_OPTIONS.some(([value]) => value === order.fulfillmentStatus) ? order.fulfillmentStatus : 'ready_to_purchase')
+  const [carrier, setCarrier] = useState(order.carrier || '')
+  const [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || '')
+  const [notifyCustomer, setNotifyCustomer] = useState(true)
+  return <form className="admin-order-status" onSubmit={(event) => { event.preventDefault(); onSave({ status, carrier, trackingNumber, notifyCustomer }) }}>
+    <strong>Update order status</strong>
+    <label>Status<select value={status} onChange={(event) => setStatus(event.target.value)}>{ORDER_STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+    <label>Carrier<input value={carrier} maxLength={60} placeholder="UPS, USPS, FedEx…" onChange={(event) => setCarrier(event.target.value)} /></label>
+    <label>Tracking number<input value={trackingNumber} maxLength={80} onChange={(event) => setTrackingNumber(event.target.value)} /></label>
+    <label className="admin-checkbox"><input type="checkbox" checked={notifyCustomer} onChange={(event) => setNotifyCustomer(event.target.checked)} /> Email the customer</label>
+    <button type="submit" className="admin-primary" disabled={working}>Save status</button>
+  </form>
 }

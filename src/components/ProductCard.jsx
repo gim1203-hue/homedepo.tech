@@ -59,8 +59,12 @@ export default function ProductCard({
   const productImage = (
     <img
       src={product.image}
+      loading="lazy"
+      decoding="async"
       alt={product.name}
       onError={(event) => {
+        if (event.currentTarget.dataset.fallbackApplied) return
+        event.currentTarget.dataset.fallbackApplied = 'true'
         event.currentTarget.src =
           'https://placehold.co/800x900/f1eee7/5f665f?text=Image+unavailable'
       }}

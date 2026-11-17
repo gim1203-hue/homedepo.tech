@@ -24,10 +24,11 @@ export default function Login() {
     if (!form.email) return setError('Enter your email address first.')
     setBusy(true); setError('')
     try {
-      await fetch('/api/password-reset-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.email }) })
+      const response = await fetch('/api/password-reset-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.email }) })
+      if (!response.ok) throw new Error('Password reset support is temporarily unavailable.')
       setMessage('Your request was sent to customer support. If the email belongs to an account, support will email a secure reset link.')
     } catch {
-      setMessage('Your request was received. Contact support@homedepo.tech if you need more help.')
+      setError('Your request could not be sent. Try again or contact support@homedepo.tech.')
     } finally {
       setBusy(false)
     }

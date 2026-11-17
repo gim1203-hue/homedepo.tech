@@ -7,3 +7,8 @@ dist
 !.env.example
 
 .vercel
+test-results/
+playwright-report/
+
+# Local backup of files before the flat-fee update
+old-files/

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../context/StoreContext'
 import { formatCurrency } from '../utils/format'
+import { getProductPrice, orderServiceFee } from '../utils/pricing'
 import { useAuth } from '../context/AuthContext'
 
 export default function Checkout() {
@@ -11,6 +12,7 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const shipping = 9
+  const serviceFee = cart.length ? orderServiceFee(subtotal) : 0
 
   async function beginCheckout() {
     if (!session) {
@@ -46,12 +48,12 @@ export default function Checkout() {
           <fieldset><legend>Payment and delivery</legend><p className="demo-note">Stripe securely collects your email, U.S. delivery address, and payment information. Sales tax is calculated from the delivery address. Card processing is included in the price, and StopShop never receives or stores your card number.</p></fieldset>
           {!session && <p className="demo-note">Please <Link to="/login">sign in</Link> before paying. This keeps your order, shipment dates, and delivery address in your account.</p>}
           {error && <p className="checkout-error" role="alert">{error}</p>}
-          <button className="button dark place-order" type="button" onClick={beginCheckout} disabled={loading}><LockKeyhole size={16} /> {loading ? 'Opening secure checkout…' : `Continue securely · ${formatCurrency(subtotal + shipping)} before tax`}</button>
+          <button className="button dark place-order" type="button" onClick={beginCheckout} disabled={loading}><LockKeyhole size={16} /> {loading ? 'Opening secure checkout…' : `Continue securely · ${formatCurrency(subtotal + shipping + serviceFee)} before tax`}</button>
         </div>
         <aside className="checkout-summary">
           <h2>Your order</h2>
-          {cart.map((item) => <div className="checkout-item" key={item.id}><div><img src={item.image} alt="" /><b>{item.quantity}</b></div><span><strong>{item.name}</strong><small>{item.color}</small></span><strong>{formatCurrency(item.price * item.quantity)}</strong></div>)}
-          <div className="summary-lines"><p><span>Subtotal</span><strong>{formatCurrency(subtotal)}</strong></p><p><span>Standard U.S. shipping</span><strong>{formatCurrency(shipping)}</strong></p><p><span>Sales tax</span><strong>Calculated by delivery address</strong></p><p><span>Card processing</span><strong>Included in price</strong></p><p className="grand-total"><span>Total before tax</span><strong>{formatCurrency(subtotal + shipping)} <small>USD</small></strong></p><p><small>Stripe calculates sales tax and shows the complete final charge before payment.</small></p></div>
+          {cart.map((item) => <div className="checkout-item" key={item.id}><div><img src={item.image} alt="" /><b>{item.quantity}</b></div><span><strong>{item.name}</strong><small>{item.color}</small></span><strong>{formatCurrency(getProductPrice(item) * item.quantity)}</strong></div>)}
+          <div className="summary-lines"><p><span>Subtotal</span><strong>{formatCurrency(subtotal)}</strong></p><p><span>Standard U.S. shipping</span><strong>{formatCurrency(shipping)}</strong></p><p><span>Sales tax</span><strong>Calculated by delivery address</strong></p><p><span>Service fee</span><strong>{formatCurrency(serviceFee)}</strong></p><p className="grand-total"><span>Total before tax</span><strong>{formatCurrency(subtotal + shipping + serviceFee)} <small>USD</small></strong></p><p><small>Stripe calculates sales tax and shows the complete final charge before payment.</small></p></div>
         </aside>
       </div>
     </section>

@@ -103,6 +103,7 @@ export default function Header() {
               setMenuOpen(!menuOpen)
             }
             aria-label="Toggle navigation"
+            aria-expanded={menuOpen}
             type="button"
           >
             {menuOpen ? <X /> : <Menu />}
