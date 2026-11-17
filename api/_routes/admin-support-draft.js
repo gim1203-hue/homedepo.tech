@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { FieldValue } from 'firebase-admin/firestore'
-import { requireAdmin, sendApiError, recordErrorReport } from './_lib/firebaseAdmin.js'
-import { draftSupportReply } from './_lib/supportAgent.js'
+import { requireAdmin, sendApiError, recordErrorReport } from '../_lib/firebaseAdmin.js'
+import { draftSupportReply } from '../_lib/supportAgent.js'
 
 // Admin-only: asks the support agent for a draft reply to one ticket. Nothing
 // is sent to the customer here; the admin reviews the draft and uses the

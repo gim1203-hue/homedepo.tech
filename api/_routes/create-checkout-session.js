@@ -1,13 +1,13 @@
 import Stripe from 'stripe'
-import { products } from '../src/data/products.js'
-import { loadCatalog } from './_lib/catalog.js'
-import { getFirebaseServices } from './_lib/firebaseAdmin.js'
-import { requireSignedInUser } from './_lib/firebaseAdmin.js'
-import { recordErrorReport } from './_lib/firebaseAdmin.js'
-import { verifyProductToken } from './_lib/productToken.js'
-import { validateCart, isAvailable } from './_lib/checkoutCart.js'
-import { siteUrl as currentSiteUrl } from './_lib/siteUrl.js'
-import { isInquiryOnly, getStopShopPrice, serviceFeeCents, SHIPPING_CENTS, SERVICE_FEE_NET_CENTS } from '../src/utils/pricing.js'
+import { products } from '../../src/data/products.js'
+import { loadCatalog } from '../_lib/catalog.js'
+import { getFirebaseServices } from '../_lib/firebaseAdmin.js'
+import { requireSignedInUser } from '../_lib/firebaseAdmin.js'
+import { recordErrorReport } from '../_lib/firebaseAdmin.js'
+import { verifyProductToken } from '../_lib/productToken.js'
+import { validateCart, isAvailable } from '../_lib/checkoutCart.js'
+import { siteUrl as currentSiteUrl } from '../_lib/siteUrl.js'
+import { isInquiryOnly, getStopShopPrice, serviceFeeCents, SHIPPING_CENTS, SERVICE_FEE_NET_CENTS } from '../../src/utils/pricing.js'
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })

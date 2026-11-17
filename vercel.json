@@ -4,17 +4,18 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/admin-support-draft.js": {
-      "maxDuration": 120
-    },
-    "api/assistant.js": {
+    "api/router.js": {
       "maxDuration": 60
     }
   },
   "rewrites": [
     {
       "source": "/sitemap.xml",
-      "destination": "/api/sitemap"
+      "destination": "/api/router?route=sitemap"
+    },
+    {
+      "source": "/api/:route",
+      "destination": "/api/router?route=:route"
     },
     {
       "source": "/((?!api/).*)",

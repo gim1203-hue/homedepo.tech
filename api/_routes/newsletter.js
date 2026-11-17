@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
-import { getFirebaseServices, sendApiError } from './_lib/firebaseAdmin.js'
-import { enforceRateLimit } from './_lib/rateLimit.js'
+import { getFirebaseServices, sendApiError } from '../_lib/firebaseAdmin.js'
+import { enforceRateLimit } from '../_lib/rateLimit.js'
 
 export default async function handler(request, response) {
   if (request.method !== 'POST') {

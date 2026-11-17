@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore'
-import { requireSignedInUser, sendApiError } from './_lib/firebaseAdmin.js'
+import { requireSignedInUser, sendApiError } from '../_lib/firebaseAdmin.js'
 
 export default async function handler(request, response) {
   if (request.method !== 'PUT') {

@@ -1,7 +1,7 @@
 import Stripe from 'stripe'
-import { requireSignedInUser, recordErrorReport } from './_lib/firebaseAdmin.js'
-import { notifyFulfillment, retrieveFullSession, savePaidOrder } from './_lib/paidOrder.js'
-import { notifyCustomerOrderPlaced } from './_lib/customerEmail.js'
+import { requireSignedInUser, recordErrorReport } from '../_lib/firebaseAdmin.js'
+import { notifyFulfillment, retrieveFullSession, savePaidOrder } from '../_lib/paidOrder.js'
+import { notifyCustomerOrderPlaced } from '../_lib/customerEmail.js'
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })

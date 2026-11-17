@@ -220,3 +220,57 @@ test('preview deployments send buyers back to the preview, production to SITE_UR
   assert.equal(siteUrl({ VERCEL_ENV: 'production', VERCEL_URL: 'shop-abc.vercel.app', SITE_URL: 'https://www.homedepo.tech/' }), 'https://www.homedepo.tech')
   assert.equal(siteUrl({}), 'https://www.homedepo.tech')
 })
+
+test('single API router dispatches routes, parses JSON and keeps raw webhook bodies', async () => {
+  const { Readable } = await import('node:stream')
+  const { default: router, routes, parseBody } = await import('../api/router.js')
+  const { readdirSync } = await import('node:fs')
+  const files = readdirSync(new URL('../api/_routes/', import.meta.url)).filter((file) => file.endsWith('.js')).map((file) => file.replace(/\.js$/, ''))
+  assert.deepEqual(Object.keys(routes).sort(), files.sort())
+
+  const makeRequest = ({ method = 'POST', route, url = '/api/router', body = '', headers = {} }) => Object.assign(Readable.from(body ? [Buffer.from(body)] : []), { method, url, headers, query: route ? { route, q: 'kept' } : {} })
+  const makeResponse = () => {
+    const response = { statusCode: 200, headers: {}, payload: undefined }
+    response.status = (code) => { response.statusCode = code; return response }
+    response.json = (value) => { response.payload = value; return response }
+    response.setHeader = (key, value) => { response.headers[key] = value }
+    return response
+  }
+
+  const missing = makeResponse()
+  await router(makeRequest({ route: 'does-not-exist' }), missing)
+  assert.equal(missing.statusCode, 404)
+
+  const viaPath = makeResponse()
+  await router(makeRequest({ url: '/api/nope?x=1' }), viaPath)
+  assert.equal(viaPath.statusCode, 404)
+
+  assert.deepEqual(parseBody(Buffer.from('{"a":1}'), 'application/json'), { a: 1 })
+  assert.equal(parseBody(Buffer.alloc(0), 'application/json'), undefined)
+
+  const badJson = makeResponse()
+  await router(makeRequest({ route: 'assistant', body: '{bad', headers: { 'content-type': 'application/json' } }), badJson)
+  assert.equal(badJson.statusCode, 400)
+
+  const previous = { stripe: process.env.STRIPE_SECRET_KEY, anthropic: process.env.ANTHROPIC_API_KEY }
+  delete process.env.STRIPE_SECRET_KEY
+  delete process.env.ANTHROPIC_API_KEY
+  try {
+    const request = makeRequest({ route: 'stripe-webhook', body: '{"id":"evt_1"}', headers: { 'content-type': 'application/json' } })
+    const webhook = makeResponse()
+    await router(request, webhook)
+    assert.equal(webhook.statusCode, 503)
+    assert.equal(request.rawBody.toString(), '{"id":"evt_1"}')
+    assert.equal(request.query.route, undefined)
+    assert.equal(request.query.q, 'kept')
+
+    const assistantRequest = makeRequest({ route: 'assistant', body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }), headers: { 'content-type': 'application/json' } })
+    const assistant = makeResponse()
+    await router(assistantRequest, assistant)
+    assert.equal(assistant.statusCode, 503)
+    assert.deepEqual(assistantRequest.body.messages[0], { role: 'user', content: 'hi' })
+  } finally {
+    if (previous.stripe !== undefined) process.env.STRIPE_SECRET_KEY = previous.stripe
+    if (previous.anthropic !== undefined) process.env.ANTHROPIC_API_KEY = previous.anthropic
+  }
+})

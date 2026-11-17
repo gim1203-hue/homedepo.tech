@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
-import { requireAdmin, sendApiError, recordErrorReport } from './_lib/firebaseAdmin.js'
-import { ORDER_STATUSES, sendCustomerEmail, statusEmail } from './_lib/customerEmail.js'
+import { requireAdmin, sendApiError, recordErrorReport } from '../_lib/firebaseAdmin.js'
+import { ORDER_STATUSES, sendCustomerEmail, statusEmail } from '../_lib/customerEmail.js'
 
 const clean = (value, max) => String(value || '').trim().slice(0, max)
 

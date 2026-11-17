@@ -1,4 +1,4 @@
-import { requireAdmin, sendApiError } from './_lib/firebaseAdmin.js'
+import { requireAdmin, sendApiError } from '../_lib/firebaseAdmin.js'
 
 export default async function handler(request, response) {
   if (request.method !== 'GET') {

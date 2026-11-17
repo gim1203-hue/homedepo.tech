@@ -1,7 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { randomUUID } from 'node:crypto'
-import { requireAdmin, sendApiError } from './_lib/firebaseAdmin.js'
-import { getStopShopPrice } from '../src/utils/pricing.js'
+import { requireAdmin, sendApiError } from '../_lib/firebaseAdmin.js'
+import { getStopShopPrice } from '../../src/utils/pricing.js'
 
 export default async function handler(request, response) {
   if (request.method !== 'POST') {

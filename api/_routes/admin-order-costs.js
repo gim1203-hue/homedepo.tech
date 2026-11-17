@@ -1,4 +1,4 @@
-import { requireAdmin, sendApiError } from './_lib/firebaseAdmin.js'
+import { requireAdmin, sendApiError } from '../_lib/firebaseAdmin.js'
 
 const dollarsToCents = (value) => {
   const amount = Number(value)

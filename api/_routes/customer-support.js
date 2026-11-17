@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
-import { requireSignedInUser, sendApiError } from './_lib/firebaseAdmin.js'
-import { emailAddress } from './_lib/email.js'
+import { requireSignedInUser, sendApiError } from '../_lib/firebaseAdmin.js'
+import { emailAddress } from '../_lib/email.js'
 
 export default async function handler(request, response) {
   try {

@@ -1,8 +1,8 @@
 const ALLOWED_METHODS = new Set(['GET'])
-import { signProduct } from './_lib/productToken.js'
-import { publicProduct } from './_lib/catalog.js'
-import { recordErrorReport } from './_lib/firebaseAdmin.js'
-import { enforceRateLimit } from './_lib/rateLimit.js'
+import { signProduct } from '../_lib/productToken.js'
+import { publicProduct } from '../_lib/catalog.js'
+import { recordErrorReport } from '../_lib/firebaseAdmin.js'
+import { enforceRateLimit } from '../_lib/rateLimit.js'
 
 export default async function handler(request, response) {
   if (!ALLOWED_METHODS.has(request.method)) {

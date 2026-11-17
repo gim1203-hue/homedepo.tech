@@ -1,10 +1,11 @@
 import { Resend } from 'resend'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
-import { getFirebaseServices } from './_lib/firebaseAdmin.js'
+import { getFirebaseServices } from '../_lib/firebaseAdmin.js'
 
 export const config = { api: { bodyParser: false } }
 
 async function readBody(request) {
+  if (Buffer.isBuffer(request.rawBody)) return request.rawBody.toString('utf8')
   const chunks = []
   for await (const chunk of request) chunks.push(Buffer.from(chunk))
   return Buffer.concat(chunks).toString('utf8')

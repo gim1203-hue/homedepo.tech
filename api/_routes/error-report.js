@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import { FieldValue } from 'firebase-admin/firestore'
-import { getFirebaseServices } from './_lib/firebaseAdmin.js'
+import { getFirebaseServices } from '../_lib/firebaseAdmin.js'
 
 export default async function handler(request, response) {
   if (request.method !== 'POST') {

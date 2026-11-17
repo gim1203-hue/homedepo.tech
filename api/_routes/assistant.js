@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { getFirebaseServices, recordErrorReport } from './_lib/firebaseAdmin.js'
-import { enforceRateLimit } from './_lib/rateLimit.js'
-import { runShopAssistant, validateChat, SUPPORT_EMAIL, SUPPORT_PHONE } from './_lib/shopAssistant.js'
+import { getFirebaseServices, recordErrorReport } from '../_lib/firebaseAdmin.js'
+import { enforceRateLimit } from '../_lib/rateLimit.js'
+import { runShopAssistant, validateChat, SUPPORT_EMAIL, SUPPORT_PHONE } from '../_lib/shopAssistant.js'
 
 const fallbackReply = `Sorry, the assistant is unavailable right now. You can email ${SUPPORT_EMAIL} or call or text ${SUPPORT_PHONE}.`
 

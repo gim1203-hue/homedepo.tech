@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { FieldValue } from 'firebase-admin/firestore'
-import { emailAddress } from './_lib/email.js'
-import { getFirebaseServices } from './_lib/firebaseAdmin.js'
+import { emailAddress } from '../_lib/email.js'
+import { getFirebaseServices } from '../_lib/firebaseAdmin.js'
 
 const GENERIC_RESPONSE = { received: true, message: 'If that email belongs to an account, support will review the request.' }
 

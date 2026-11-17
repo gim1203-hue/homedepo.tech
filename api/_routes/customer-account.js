@@ -1,8 +1,8 @@
 import Stripe from 'stripe'
 import { FieldValue } from 'firebase-admin/firestore'
-import { recordErrorReport, requireSignedInUser, sendApiError } from './_lib/firebaseAdmin.js'
-import { invoiceNumber } from './_lib/order.js'
-import { retrieveFullSession, savePaidOrder } from './_lib/paidOrder.js'
+import { recordErrorReport, requireSignedInUser, sendApiError } from '../_lib/firebaseAdmin.js'
+import { invoiceNumber } from '../_lib/order.js'
+import { retrieveFullSession, savePaidOrder } from '../_lib/paidOrder.js'
 
 const clean = (value, limit = 120) => String(value || '').trim().slice(0, limit)
 const stripe = process.env.STRIPE_SECRET_KEY

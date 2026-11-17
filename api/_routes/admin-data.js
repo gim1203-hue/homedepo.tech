@@ -1,7 +1,7 @@
 import Stripe from 'stripe'
 import { Resend } from 'resend'
-import { loadCatalog } from './_lib/catalog.js'
-import { requireAdmin, sendApiError } from './_lib/firebaseAdmin.js'
+import { loadCatalog } from '../_lib/catalog.js'
+import { requireAdmin, sendApiError } from '../_lib/firebaseAdmin.js'
 
 export default async function handler(request, response) {
   if (request.method !== 'GET') {

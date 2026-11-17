@@ -1,5 +1,5 @@
-import { getFirebaseServices } from './_lib/firebaseAdmin.js'
-import { loadCatalog, publicProduct } from './_lib/catalog.js'
+import { getFirebaseServices } from '../_lib/firebaseAdmin.js'
+import { loadCatalog, publicProduct } from '../_lib/catalog.js'
 
 export default async function handler(request, response) {
   if (request.method !== 'GET') {

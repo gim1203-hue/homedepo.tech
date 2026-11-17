@@ -1,6 +1,6 @@
-import { products } from '../src/data/products.js'
-import { loadCatalog } from './_lib/catalog.js'
-import { getFirebaseServices } from './_lib/firebaseAdmin.js'
+import { products } from '../../src/data/products.js'
+import { loadCatalog } from '../_lib/catalog.js'
+import { getFirebaseServices } from '../_lib/firebaseAdmin.js'
 
 const escapeXml = (value) => String(value).replace(/[<>&'"]/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[character]))
 

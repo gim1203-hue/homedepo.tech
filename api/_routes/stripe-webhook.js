@@ -1,9 +1,9 @@
 import Stripe from 'stripe'
 import { FieldValue } from 'firebase-admin/firestore'
-import { getFirebaseServices, recordErrorReport } from './_lib/firebaseAdmin.js'
-import { notifyFulfillment, retrieveFullSession, savePaidOrder as persistPaidOrder } from './_lib/paidOrder.js'
-import { emailAddress } from './_lib/email.js'
-import { notifyCustomerOrderPlaced } from './_lib/customerEmail.js'
+import { getFirebaseServices, recordErrorReport } from '../_lib/firebaseAdmin.js'
+import { notifyFulfillment, retrieveFullSession, savePaidOrder as persistPaidOrder } from '../_lib/paidOrder.js'
+import { emailAddress } from '../_lib/email.js'
+import { notifyCustomerOrderPlaced } from '../_lib/customerEmail.js'
 
 export const config = { api: { bodyParser: false } }
 
@@ -12,6 +12,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   : null
 
 async function readRawBody(request) {
+  if (Buffer.isBuffer(request.rawBody)) return request.rawBody
   const chunks = []
   for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
   return Buffer.concat(chunks)
